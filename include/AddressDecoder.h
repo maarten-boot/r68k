@@ -9,6 +9,7 @@
 #include <fstream>
 #include <memory>
 #include "Memory.h"
+#include "Duart.h"
 
 namespace rosco {
     namespace m68k {
@@ -32,11 +33,14 @@ namespace rosco {
 
                 void LoadMemoryFile(const uint32_t baseAddr, char const* filename);
 
+                void setDuart(Duart* d) { this->duart = d; }
+
             private:
                 std::unique_ptr<Memory> rom;
                 std::unique_ptr<Memory> ram;
                 bool bootLineActive;
                 uint32_t bootReadCount;
+                Duart* duart = nullptr;
 
                 void ReadRomData(char const* filename);
             };

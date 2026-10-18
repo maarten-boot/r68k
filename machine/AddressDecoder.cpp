@@ -107,6 +107,10 @@ namespace rosco {
             }
 
             std::uint8_t AddressDecoder::read8(std::uint32_t address) {
+                if (this->duart != nullptr && Duart::contains(address)) {
+                    return this->duart->read(address);
+                }
+
                 Memory *mem = this->getMemoryForAddress(address);
 
                 if (mem != NULL) {
@@ -138,6 +142,11 @@ namespace rosco {
             }
 
             void AddressDecoder::write8(std::uint32_t address, std::uint8_t data) {
+                if (this->duart != nullptr && Duart::contains(address)) {
+                    this->duart->write(address, data);
+                    return;
+                }
+
                 Memory *mem = this->getMemoryForAddress(address);
 
                 if (mem != NULL) {

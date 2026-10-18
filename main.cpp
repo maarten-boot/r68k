@@ -1,3 +1,6 @@
+#include <csignal>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <filesystem>
 #include <stdint.h>
@@ -97,6 +100,7 @@ static char* print_unsigned(uint32_t num, uint8_t base) {
 
 extern "C" {
     rosco::m68k::emu::AddressDecoder* __mem;
+    rosco::m68k::emu::Duart* __duart = nullptr;
     std::fstream ifs("rosco_sd.bin", std::ios::binary | std::ios::ate | std::ios::in | std::ios::out);
 
     int illegal_instruction_handler(int __attribute__((unused)) opcode) {
@@ -483,6 +487,10 @@ extern "C" {
     int interrupt_ack_handler(unsigned int irq) {
         switch (irq) {
         case DUART_IRQ:
+            if (__duart != nullptr) {
+                // Emulated XR68C681: level sensitive, vector from IVR
+                return __duart->vector();
+            }
             // DUART timer tick - vector to 0x45
             m68k_set_irq(0);
             return DUART_VEC;
@@ -508,9 +516,109 @@ void timer_interrupt() {
     }
 }
 
+// Debugging aid: "kill -USR1 <pid>" prints where the CPU is, and the
+// last program counters (the jumps between them are what matters).
+static volatile sig_atomic_t dump_requested = 0;
+static unsigned int pc_ring[4096];
+static unsigned int pc_pos;
+
+static bool pc_frozen;
+// RAM size: 1MB (the on-board RAM) unless R68K_RAM gives another, e.g.
+// R68K_RAM=5M (on-board plus the 4MB expansion) or R68K_RAM=2048K
+static unsigned int ram_size = 0x100000;
+
+static unsigned int get_ram_size() {
+    const char *e = getenv("R68K_RAM");
+    if (e == NULL || *e == 0) return 0x100000;
+    char *end;
+    unsigned long n = strtoul(e, &end, 0);
+    if (*end == 'M' || *end == 'm') n <<= 20;
+    else if (*end == 'K' || *end == 'k') n <<= 10;
+    if (n < 0x80000 || n > 0xE00000 || (n & 0x7FFFF) != 0) {
+        fprintf(stderr, "r68k: R68K_RAM must be a multiple of 512K, 512K-14M\n");
+        exit(1);
+    }
+    return n;
+}
+
+static void dump_cpu();
+
+extern "C" void r68k_trace_pc(unsigned int pc) {
+    // Only with R68K_TRACE set: keep a PC trace (shown by the SIGUSR1
+    // dump), stop it when the PC runs wild.  R68K_DUMPAT=<hex pc>: dump
+    // CPU and RAM the first time pc is reached.
+    static int dumpat_init, tracing;
+    static unsigned long dumpat;
+    if (!dumpat_init) {
+        const char *e = getenv("R68K_DUMPAT");
+        dumpat_init = 1;
+        dumpat = e ? strtoul(e, NULL, 16) : 0;
+        tracing = getenv("R68K_TRACE") != NULL;
+        if (!tracing) pc_frozen = true;
+    }
+    if (dumpat && pc == dumpat) {
+        dumpat = 0;
+        fprintf(stderr, "\n[r68k] reached %08X\n", pc);
+        dump_cpu();
+    }
+    if (pc_frozen) return;
+    pc_ring[pc_pos++ & 4095] = pc;
+    // stop at the first PC outside RAM and ROM, or odd, or the second
+    // zero opcode in a row (running through empty memory): keep the way there
+    static unsigned int zeros;
+    zeros = (pc & 1) == 0 && m68k_read_memory_16(pc) == 0 ? zeros + 1 : 0;
+    if ((pc & 1) || zeros >= 2 ||
+        (pc >= ram_size && (pc < 0xE00000 || pc >= 0xF00000))) {
+        pc_frozen = true;
+        fprintf(stderr, "\n[r68k] PC went wild: %08X (trace frozen)\n", pc);
+    }
+}
+
+static void dump_cpu() {
+    char buf[100];
+    unsigned int pc = m68k_get_reg(NULL, M68K_REG_PC);
+    fprintf(stderr, "\n[r68k] PC=%08X SR=%04X SP=%08X USP=%08X SSP=%08X\n",
+            pc, m68k_get_reg(NULL, M68K_REG_SR), m68k_get_reg(NULL, M68K_REG_SP),
+            m68k_get_reg(NULL, M68K_REG_USP), m68k_get_reg(NULL, M68K_REG_ISP));
+    for (int r = 0; r < 8; r++)
+        fprintf(stderr, "[r68k] D%d=%08X A%d=%08X\n", r,
+                m68k_get_reg(NULL, (m68k_register_t)(M68K_REG_D0 + r)), r,
+                m68k_get_reg(NULL, (m68k_register_t)(M68K_REG_A0 + r)));
+    for (int i = 0; i < 6; i++) {
+        unsigned int len = m68k_disassemble(buf, pc, M68K_CPU_TYPE_68010);
+        fprintf(stderr, "[r68k]   %08X  %s\n", pc, buf);
+        pc += len;
+    }
+    // the RAM, for a closer look
+    if (FILE *f = fopen("r68k-ram.bin", "wb")) {
+        for (unsigned int a = 0; a < ram_size; a++) fputc(m68k_read_memory_8(a), f);
+        fclose(f);
+        fprintf(stderr, "[r68k] RAM written to r68k-ram.bin\n");
+    }
+    // non-sequential steps in the trace: where control flow went
+    unsigned int prev = 0;
+    for (unsigned int i = pc_pos - 4096; i != pc_pos; i++) {
+        unsigned int p = pc_ring[i & 4095];
+        if (p < prev || p > prev + 10) {
+            m68k_disassemble(buf, prev, M68K_CPU_TYPE_68010);
+            fprintf(stderr, "[r68k] trace %08X %-30s -> %08X\n", prev, buf, p);
+        }
+        prev = p;
+    }
+}
+
 int main(int argc, char** argv) {
+    signal(SIGUSR1, [](int) { dump_requested = 1; });
+    bool emulateDuart = argc == 3 && std::string(argv[1]) == "-d";
+    if (emulateDuart) {
+        argv[1] = argv[2];
+        argc = 2;
+    }
+
     if (argc != 2) {
-        cout << "Usage: xl86 <binary>" << endl;
+        cout << "Usage: r68k [-d] <binary>" << endl;
+        cout << "  -d  emulate the XR68C681 DUART registers and timer" << endl;
+        cout << "  R68K_RAM=5M  RAM size (default 1M, the on-board RAM)" << endl;
         return 1;
     } else {
         init_term();
@@ -518,8 +626,16 @@ int main(int argc, char** argv) {
         std::filesystem::path path = std::filesystem::path(argv[0]).parent_path();
         path += "/firmware/rosco_m68k.rom";
 
-        __mem = new rosco::m68k::emu::AddressDecoder(0x40000, 0x100000, path.string().c_str());
+        ram_size = get_ram_size();
+        __mem = new rosco::m68k::emu::AddressDecoder(0x40000, ram_size, path.string().c_str());
         __mem->LoadMemoryFile(0x40000, argv[1]);
+
+        if (emulateDuart) {
+            __duart = new rosco::m68k::emu::Duart([](bool asserted) {
+                m68k_set_irq(asserted ? DUART_IRQ : 0);
+            });
+            __mem->setDuart(__duart);
+        }
 
         m68k_set_cpu_type(M68K_CPU_TYPE_68010);
         m68k_init();
@@ -528,6 +644,17 @@ int main(int argc, char** argv) {
         m68ki_cpu_core ctx;
         m68k_get_context(&ctx);
         
+        if (emulateDuart) {
+            while (1) {
+                m68k_execute(10000);
+                __duart->poll();
+                if (dump_requested) {
+                    dump_requested = 0;
+                    dump_cpu();
+                }
+            }
+        }
+
         std::thread timer_thread(timer_interrupt);
         while (1) {
             m68k_execute(100000);
