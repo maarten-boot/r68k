@@ -479,9 +479,13 @@ extern "C" {
                 default:
                     cerr << "<UNKNOWN OP " << hex << op << "; D7=0x" << hex << d7 << "; D6=0x" << d6 << ": IGNORED>" << endl;
             }
+
+            return 1;
         }
 
-        return 1;
+        // Not a firmware trap: a real illegal instruction, so take the
+        // exception (vector 4) as the CPU would.
+        return 0;
     }
 
     int interrupt_ack_handler(unsigned int irq) {
