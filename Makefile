@@ -5,7 +5,7 @@ CLEAN_FILES=r68k *.o *.d rosco_m68k_glue/*.o rosco_m68k_glue/*.d machine/*.o mac
 R68K_OBJS=machine/AddressDecoder.o machine/Duart.o machine/Memory.o rosco_m68k_glue/cpuglue.o rosco_m68k_glue/memoryglue.o main.o
 MUSASHI_OBJS=musashi/m68kcpu.o musashi/m68kdasm.o musashi/m68kops.o musashi/softfloat/softfloat.o
 ROM_BINARY=firmware/rosco_m68k.rom
-CXXFLAGS=-Wall -Wextra -Wpedantic -Iinclude
+CXXFLAGS=-O2 -Wall -Wextra -Wpedantic -Iinclude
 DEPFLAGS=-MMD -MP
 
 .PHONY: clean all musashi check
