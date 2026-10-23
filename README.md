@@ -61,6 +61,10 @@ The ROM is read-only, writes to it are ignored, like the board's flash
 with its write enable off. `-w` makes it writable, as plain memory: the
 flash chip's program and erase commands are not emulated.
 
+Like a real 68010, a word or long access at an odd address, or a jump
+to one, is an address error (vector 3, format 8 frame), with or
+without `-d`.
+
 r68k exits with the program's exit code. Other exit codes:
 
 | Code | Why |
@@ -68,6 +72,7 @@ r68k exits with the program's exit code. Other exit codes:
 | 1    | a bad option, the ROM or program could not be loaded, or a bad `R68K_RAM` |
 | 132  | an illegal instruction, with no handler installed (128 + SIGILL) |
 | 128 + SIGBUS | `-d`: a bus error, with no handler installed |
+| 128 + SIGBUS | an address error (word or long access at an odd address, or an odd PC), with no handler installed |
 | 0    | end of input while the program waits for a character |
 
 ### Settings

@@ -587,6 +587,21 @@ static unsigned int get_ram_size() {
 
 static void dump_cpu();
 
+// A word or long access at an odd address (or an odd PC): the 68010
+// takes an address error. With vector 3 still the ROM's default, which
+// halts for ever, report and stop instead, with the exit status of a
+// SIGBUS. Called by Musashi before it takes the exception.
+extern "C" void r68k_address_error(unsigned int address, int write, unsigned int pc) {
+    NoBusErrors noBusErrors;
+    uint32_t handler = m68k_read_memory_32(m68k_get_reg(NULL, M68K_REG_VBR) + 3 * 4);
+
+    if (handler == m68k_read_memory_32(0xE00000 + 3 * 4)) {
+        fprintf(stderr, "\n[r68k] address error: %s at %08X, PC %08X, no handler: exiting\n",
+                write ? "write" : "read", address, pc);
+        exit(128 + SIGBUS);
+    }
+}
+
 // Whether Musashi calls r68k_trace_pc at all (see m68kconf.h)
 extern "C" {
     int r68k_trace_on = 0;

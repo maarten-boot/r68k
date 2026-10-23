@@ -177,7 +177,10 @@ void r68k_trace_pc(unsigned int pc);
  * access a word or longword at an odd address.
  * NOTE: This is only emulated properly for 68000 mode.
  */
-#define M68K_EMULATE_ADDRESS_ERROR  OPT_OFF
+#define M68K_EMULATE_ADDRESS_ERROR  OPT_ON
+
+/* r68k: told about each address error before it is taken (main.cpp) */
+void r68k_address_error(unsigned int address, int write, unsigned int pc);
 
 
 /* Turn ON to enable logging of illegal instruction calls.

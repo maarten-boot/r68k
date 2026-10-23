@@ -99,6 +99,34 @@ expect "-d: bus error exits 128+SIGBUS" $((128 + $(kill -l BUS))) "" "bus error 
 run 5 berr.bin < /dev/null
 expect "no -d: no bus error" 0
 
+# Address errors (always, they are the CPU's): a word or long access at
+# an odd address, or an odd PC. Bytes may be anywhere.
+sigbus=$((128 + $(kill -l BUS)))
+# lea $1001.w,a0 / move.l d0,(a0) / exit
+bin aerr_wl.bin "41f8 1001 2080 $EXIT"
+run 5 aerr_wl.bin < /dev/null
+expect "address error: move.l to an odd address" $sigbus "" "address error: write at 00001001"
+run 5 -d aerr_wl.bin < /dev/null
+expect "-d: address error too" $sigbus "" "address error: write at 00001001"
+# move.w $1001.w,d0 / exit
+bin aerr_rw.bin "3038 1001 $EXIT"
+run 5 aerr_rw.bin < /dev/null
+expect "address error: move.w from an odd address" $sigbus "" "address error: read at 00001001"
+# jmp $40001
+bin aerr_pc.bin "4ef9 0004 0001"
+run 5 aerr_pc.bin < /dev/null
+expect "address error: odd PC" $sigbus "" "address error: read at 00040001"
+# move.b d0,$1001.w / exit
+bin oddbyte.bin "11c0 1001 $EXIT"
+run 5 oddbyte.bin < /dev/null
+expect "byte at an odd address is fine" 0
+# move.l #handler,$C.w / lea $1001.w,a0 / move.l d0,(a0) / nop x2 /
+# handler: move.w 6(a7),d0 / lsr.w #8,d0 / lsr.w #4,d0 / and.l #$F,d0 /
+# push x2 / exit: the 68010 frame format, 8
+bin aerr_frame.bin "21fc 0004 0012 000c 41f8 1001 2080 4e71 4e71 302f 0006 e048 e848 0280 0000 000f 2f00 2f00 $EXIT"
+run 5 aerr_frame.bin < /dev/null
+expect "address error handler gets a format 8 frame" 8
+
 # moveq #0,d7 / illegal: a real illegal instruction, the ROM's halting
 # handler is still in place
 bin illegal.bin "7e00 4afc"
