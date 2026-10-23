@@ -653,8 +653,14 @@ static void dump_cpu() {
     }
 }
 
-// The ROM: next to the r68k executable, wherever it was started from
+// The ROM: R68K_ROM if set (e.g. a real firmware, with -d), else the
+// one next to the r68k executable, wherever it was started from
 static std::filesystem::path rom_path(const char *argv0) {
+    const char *rom = getenv("R68K_ROM");
+    if (rom != NULL && *rom != 0) {
+        return rom;
+    }
+
     std::error_code ec;
     std::filesystem::path exe = std::filesystem::read_symlink("/proc/self/exe", ec);
     if (ec) {
@@ -688,6 +694,7 @@ int main(int argc, char** argv) {
         cout << "  -d  emulate the XR68C681 DUART registers and timer, and bus" << endl;
         cout << "      errors for unmapped addresses (real firmware runs with this)" << endl;
         cout << "  R68K_RAM=5M  RAM size (default 1M, the on-board RAM)" << endl;
+        cout << "  R68K_ROM=<file>  ROM image (default firmware/rosco_m68k.rom next to r68k)" << endl;
         return 1;
     } else {
         ram_size = get_ram_size();

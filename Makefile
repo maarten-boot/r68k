@@ -8,9 +8,12 @@ ROM_BINARY=firmware/rosco_m68k.rom
 CXXFLAGS=-Wall -Wextra -Wpedantic -Iinclude
 DEPFLAGS=-MMD -MP
 
-.PHONY: clean all musashi
+.PHONY: clean all musashi check
 
 all: r68k $(ROM_BINARY)
+
+check: r68k $(ROM_BINARY)
+	tests/run.sh ./r68k
 
 clean:
 	rm -rf $(CLEAN_FILES)
