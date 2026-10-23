@@ -23,11 +23,65 @@ your choosing) installed, as well as build tools for your platform.
 make clean all
 ```
 
+The m68k toolchain (`vasmm68k_mot`, `m68k-elf-*`) is only needed for
+the firmware ROM: once `firmware/rosco_m68k.rom` exists, `make` only
+rebuilds it when its sources change.
+
+To run the tests (no m68k toolchain needed):
+
+```
+make check
+```
+
+The tests also boot the real rosco_m68k firmware if its ROMs are around,
+see `R68K_REAL_ROMS` in `tests/run.sh`.
+
 ## Run it
 
 ```shell
-./r68k <rosco_m68k binary file>
+./r68k [-d] <rosco_m68k binary file>
 ```
+
+The program is loaded at `0x40000` and run by r68k's own small
+firmware, which hands console and SD card I/O to r68k.
+
+`-d` adds a model of the XR68C681 DUART (rosco_m68k Classic v2) at
+`0xF00000`, with its timer and interrupts. Channel A is stdin/stdout,
+channel B transmit goes to stderr. With `-d`, an access where nothing is
+mapped is a bus error, as on the real hardware. This is enough to boot
+the real rosco_m68k firmware:
+
+```shell
+R68K_ROM=rosco_m68k.rom ./r68k -d whatever.bin
+```
+
+r68k exits with the program's exit code. Other exit codes:
+
+| Code | Why |
+|------|-----|
+| 1    | the ROM or program could not be loaded, or a bad `R68K_RAM` |
+| 132  | an illegal instruction, with no handler installed (128 + SIGILL) |
+| 128 + SIGBUS | `-d`: a bus error, with no handler installed |
+| 0    | end of input while the program waits for a character |
+
+### Settings
+
+| Environment          | What |
+|----------------------|------|
+| `R68K_RAM=5M`        | RAM size, a multiple of 512K up to 14M (`K` and `M` suffixes). Default 1M, the on-board RAM. |
+| `R68K_ROM=<file>`    | ROM image, up to 1MB. Default `firmware/rosco_m68k.rom` next to `r68k`. |
+
+The SD card is the file `rosco_sd.bin` in the current directory, if it
+exists.
+
+### Debugging
+
+| | What |
+|-|------|
+| `kill -USR1 <pid>`         | Dumps the registers, the next few instructions and the PC trace (below) to stderr, and the RAM to `r68k-ram.bin`. |
+| `R68K_TRACE=1`             | Keeps the last 4096 PCs for that dump. It stops at the first odd PC, a PC outside RAM and ROM, or two zero opcodes in a row, so the trace shows how it got there. |
+| `R68K_DUMPAT=<hex pc>`     | The same dump, the first time the PC gets there. |
+| `R68K_WATCH=lo-hi[,plo-phi]` | Reports the first 8 writes into `[lo, hi)` (hex), with the PC and code of the first writer. Writes by code in `[plo, phi)` are left out. |
 
 ## That's it
 
