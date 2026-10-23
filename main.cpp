@@ -658,9 +658,13 @@ static void dump_cpu() {
     }
 }
 
-// The ROM: R68K_ROM if set (e.g. a real firmware, with -d), else the
-// one next to the r68k executable, wherever it was started from
-static std::filesystem::path rom_path(const char *argv0) {
+// The ROM: -r, else R68K_ROM if set (e.g. a real firmware, with -d),
+// else the one next to the r68k executable, wherever it was started from
+static std::filesystem::path rom_path(const char *argv0, const char *option) {
+    if (option != NULL) {
+        return option;
+    }
+
     const char *rom = getenv("R68K_ROM");
     if (rom != NULL && *rom != 0) {
         return rom;
@@ -686,26 +690,72 @@ static void check_dump() {
     }
 }
 
+static void usage(std::ostream &out) {
+    out << "Usage: r68k [-d] [-r <rom>] [-w] <binary>   (options anywhere, -- ends them)" << endl;
+    out << "  -d        emulate the XR68C681 DUART registers and timer, and bus" << endl;
+    out << "            errors for unmapped addresses (real firmware runs with this)" << endl;
+    out << "  -r <rom>  ROM image, also -r<rom> (default R68K_ROM, else" << endl;
+    out << "            firmware/rosco_m68k.rom next to r68k)" << endl;
+    out << "  -w        ROM writable (the board's flash write enable), as plain" << endl;
+    out << "            memory: no flash commands. Default: writes ignored" << endl;
+    out << "  -h        this help" << endl;
+    out << "  R68K_RAM=5M  RAM size (default 1M, the on-board RAM)" << endl;
+}
+
 int main(int argc, char** argv) {
     signal(SIGUSR1, [](int) { dump_requested = 1; });
-    bool emulateDuart = argc == 3 && std::string(argv[1]) == "-d";
-    if (emulateDuart) {
-        argv[1] = argv[2];
-        argc = 2;
+
+    // By hand rather than getopt(): BSD/macOS getopt stops at the first
+    // non-option, and the options may also come after the binary
+    bool emulateDuart = false;
+    const char *romOption = NULL;
+    bool romWritable = false;
+    const char *binary = NULL;
+    bool options = true;
+
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+
+        if (!options || arg.size() < 2 || arg[0] != '-') {
+            if (binary != NULL) {
+                cerr << "r68k: one binary only, got " << binary << " and " << arg << endl;
+                return 1;
+            }
+            binary = argv[i];
+        } else if (arg == "--") {
+            options = false;
+        } else if (arg == "-d") {
+            emulateDuart = true;
+        } else if (arg.compare(0, 2, "-r") == 0) {
+            if (arg.size() > 2) {
+                romOption = argv[i] + 2;
+            } else if (i + 1 < argc) {
+                romOption = argv[++i];
+            } else {
+                cerr << "r68k: -r needs a ROM file" << endl;
+                return 1;
+            }
+        } else if (arg == "-w") {
+            romWritable = true;
+        } else if (arg == "-h") {
+            usage(cout);
+            return 0;
+        } else {
+            cerr << "r68k: unknown option " << arg << endl;
+            usage(cerr);
+            return 1;
+        }
     }
 
-    if (argc != 2) {
-        cout << "Usage: r68k [-d] <binary>" << endl;
-        cout << "  -d  emulate the XR68C681 DUART registers and timer, and bus" << endl;
-        cout << "      errors for unmapped addresses (real firmware runs with this)" << endl;
-        cout << "  R68K_RAM=5M  RAM size (default 1M, the on-board RAM)" << endl;
-        cout << "  R68K_ROM=<file>  ROM image (default firmware/rosco_m68k.rom next to r68k)" << endl;
+    if (binary == NULL) {
+        usage(cout);
         return 1;
     } else {
         ram_size = get_ram_size();
         try {
-            __mem = new rosco::m68k::emu::AddressDecoder(ROM_SIZE, ram_size, rom_path(argv[0]).string().c_str());
-            __mem->LoadMemoryFile(0x40000, argv[1]);
+            __mem = new rosco::m68k::emu::AddressDecoder(ROM_SIZE, ram_size, rom_path(argv[0], romOption).string().c_str());
+            __mem->LoadMemoryFile(0x40000, binary);
+            __mem->setRomWritable(romWritable);
         } catch (const std::exception &e) {
             cerr << "r68k: " << e.what() << endl;
             return 1;

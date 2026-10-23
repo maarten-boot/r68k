@@ -39,8 +39,10 @@ see `R68K_REAL_ROMS` in `tests/run.sh`.
 ## Run it
 
 ```shell
-./r68k [-d] <rosco_m68k binary file>
+./r68k [-d] [-r <rom>] [-w] <rosco_m68k binary file>
 ```
+
+The options can also come after the file; `--` ends them.
 
 The program is loaded at `0x40000` and run by r68k's own small
 firmware, which hands console and SD card I/O to r68k.
@@ -52,14 +54,18 @@ mapped is a bus error, as on the real hardware. This is enough to boot
 the real rosco_m68k firmware:
 
 ```shell
-R68K_ROM=rosco_m68k.rom ./r68k -d whatever.bin
+./r68k -d -r rosco_m68k.rom whatever.bin
 ```
+
+The ROM is read-only, writes to it are ignored, like the board's flash
+with its write enable off. `-w` makes it writable, as plain memory: the
+flash chip's program and erase commands are not emulated.
 
 r68k exits with the program's exit code. Other exit codes:
 
 | Code | Why |
 |------|-----|
-| 1    | the ROM or program could not be loaded, or a bad `R68K_RAM` |
+| 1    | a bad option, the ROM or program could not be loaded, or a bad `R68K_RAM` |
 | 132  | an illegal instruction, with no handler installed (128 + SIGILL) |
 | 128 + SIGBUS | `-d`: a bus error, with no handler installed |
 | 0    | end of input while the program waits for a character |
@@ -69,7 +75,7 @@ r68k exits with the program's exit code. Other exit codes:
 | Environment          | What |
 |----------------------|------|
 | `R68K_RAM=5M`        | RAM size, a multiple of 512K up to 14M (`K` and `M` suffixes). Default 1M, the on-board RAM. |
-| `R68K_ROM=<file>`    | ROM image, up to 1MB. Default `firmware/rosco_m68k.rom` next to `r68k`. |
+| `R68K_ROM=<file>`    | ROM image, up to 1MB, when there is no `-r`. Default `firmware/rosco_m68k.rom` next to `r68k`. |
 
 The SD card is the file `rosco_sd.bin` in the current directory, if it
 exists.

@@ -16,6 +16,9 @@ here=$(cd "$(dirname "$0")" && pwd)
 r68k=$(cd "$(dirname "${1:-$here/../r68k}")" && pwd)/$(basename "${1:-r68k}")
 real_roms=${R68K_REAL_ROMS:-$here/../../rosco-emulator/roms/rosco_m68k_010.zip}
 
+# r68k's own ROM, for -r
+romfile=$(dirname "$r68k")/firmware/rosco_m68k.rom
+
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cd "$work" || exit 1
@@ -114,9 +117,9 @@ expect "read_char" 120
 run 5 readchar.bin < /dev/null
 expect "read_char at end of input" 0 "" "end of input"
 
-# move.w #$2000,sr / move.l #10000000,d0 / 1: subq.l #1,d0 / bne 1b /
+# move.w #$2000,sr / move.l #40000000,d0 / 1: subq.l #1,d0 / bne 1b /
 # GETUPTICKS / move.l d1,-(a7) x2 / exit: some 100Hz ticks have passed
-bin ticks.bin "46fc 2000 203c 0098 9680 5380 66fc $(trap_ d8) 2f01 2f01 $EXIT"
+bin ticks.bin "46fc 2000 203c 0262 5a00 5380 66fc $(trap_ d8) 2f01 2f01 $EXIT"
 run 30 ticks.bin < /dev/null
 if [ "$rc" -ge 1 ] && [ "$rc" -le 255 ]; then ok "uptime ticks ($rc)"; else fail "uptime ticks" "exit status $rc"; fi
 
@@ -147,6 +150,40 @@ fi
 # exit.bin: the second instruction is at 0x40006
 R68K_DUMPAT=40006 run 5 exit.bin < /dev/null
 expect "R68K_DUMPAT" 0 "" "reached 00040006"
+
+# move.b #$5A,$E00100 / move.l #$A5A5A5A5,$E00104 / move.b $E00100,d0 /
+# add.b $E00107,d0 / and.l #$FF,d0 / push x2 / exit: $5A + $A5 = $FF with
+# the ROM writable, else the ROM's own bytes ($00 + $8A here)
+bin romwrite.bin "13fc 005a 00e0 0100 23fc a5a5 a5a5 00e0 0104 1039 00e0 0100 d039 00e0 0107 0280 0000 00ff 2f00 2f00 $EXIT"
+run 5 romwrite.bin < /dev/null
+if [ "$rc" != 255 ] && [ "$rc" != 124 ]; then ok "ROM read-only"; else fail "ROM read-only" "exit status $rc"; fi
+run 5 -d romwrite.bin < /dev/null
+if [ "$rc" != 255 ] && [ "$rc" != 124 ]; then ok "-d: ROM read-only, no bus error"; else fail "-d: ROM read-only, no bus error" "exit status $rc"; fi
+run 5 romwrite.bin -w < /dev/null
+expect "-w: ROM writable" 255
+
+# options: anywhere, -r with or without a space, --, errors
+run 5 duart.bin -d < /dev/null
+expect "-d after the binary" 0 "^A$"
+run 5 -r "$romfile" -d duart.bin < /dev/null
+expect "-r <rom>" 0 "^A$"
+run 5 duart.bin "-r$romfile" -d < /dev/null
+expect "-r<rom> after the binary" 0 "^A$"
+R68K_ROM=nonexistent.rom run 5 -r "$romfile" exit.bin < /dev/null
+expect "-r over R68K_ROM" 0
+run 5 -r nonexistent.rom exit.bin < /dev/null
+expect "-r with a missing ROM" 1 "" "cannot open nonexistent.rom"
+cp exit.bin ./-x.bin
+run 5 -- -x.bin < /dev/null
+expect "-- ends the options" 0
+run 5 -x exit.bin < /dev/null
+expect "unknown option" 1 "" "unknown option -x"
+run 5 exit.bin exit42.bin < /dev/null
+expect "two binaries" 1 "" "one binary only"
+run 5 exit.bin -r < /dev/null
+expect "-r without a file" 1 "" "-r needs a ROM file"
+run 5 -h < /dev/null
+expect "-h" 0 "^Usage: r68k"
 
 run 5 missing.bin < /dev/null
 expect "missing program" 1 "" "cannot open missing.bin"
