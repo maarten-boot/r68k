@@ -41,6 +41,16 @@ namespace rosco {
                 }
             }
 
+            bool AddressDecoder::isMapped(std::uint32_t address, std::uint32_t size) {
+                for (std::uint32_t a : {address, address + size - 1}) {
+                    bool duart = this->duart != nullptr && Duart::contains(a);
+                    if (!duart && this->getMemoryForAddress(a) == NULL) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
             std::uint32_t AddressDecoder::makeRelativeAddress(std::uint32_t address) {
                 if (address < this->ram->size) {
 #ifdef MEM_TRACE
@@ -69,6 +79,10 @@ namespace rosco {
             std::uint32_t AddressDecoder::read32(std::uint32_t address) {
                 Memory *mem;
 
+                if (this->duart != nullptr && Duart::contains(address)) {
+                    return (std::uint32_t)this->read16(address) << 16 | this->read16(address + 2);
+                }
+
                 if (this->bootLineActive && address < this->rom->size) {
                     if (this->bootReadCount++ < 1) {
 #ifdef MEM_TRACE
@@ -96,6 +110,11 @@ namespace rosco {
             }
 
             std::uint16_t AddressDecoder::read16(std::uint32_t address) {
+                if (this->duart != nullptr && Duart::contains(address)) {
+                    // 8-bit device: the registers are the odd bytes
+                    return (std::uint16_t)(this->duart->read(address) << 8 | this->duart->read(address + 1));
+                }
+
                 Memory *mem = this->getMemoryForAddress(address);
 
                 if (mem != NULL) {
@@ -122,6 +141,12 @@ namespace rosco {
             }
 
             void AddressDecoder::write32(std::uint32_t address, std::uint32_t data) {
+                if (this->duart != nullptr && Duart::contains(address)) {
+                    this->write16(address, data >> 16);
+                    this->write16(address + 2, data & 0xFFFF);
+                    return;
+                }
+
                 Memory *mem = this->getMemoryForAddress(address);
 
                 if (mem != NULL) {
@@ -132,6 +157,12 @@ namespace rosco {
             }
 
             void AddressDecoder::write16(std::uint32_t address, std::uint16_t data) {
+                if (this->duart != nullptr && Duart::contains(address)) {
+                    this->duart->write(address, data >> 8);
+                    this->duart->write(address + 1, data & 0xFF);
+                    return;
+                }
+
                 Memory *mem = this->getMemoryForAddress(address);
 
                 if (mem != NULL) {

@@ -126,12 +126,24 @@ static char* print_unsigned(uint32_t num, uint8_t base) {
     return ((char*)&buf[bp+1]);
 }
 
+// Bus errors for unmapped addresses (-d), see memoryglue.cpp
+extern "C" bool r68k_bus_errors;
+extern "C" int r68k_no_bus_errors;
+
+// r68k's own looks at memory (firmware traps, debug aids) never take a
+// bus error
+struct NoBusErrors {
+    NoBusErrors() { r68k_no_bus_errors++; }
+    ~NoBusErrors() { r68k_no_bus_errors--; }
+};
+
 extern "C" {
     rosco::m68k::emu::AddressDecoder* __mem;
     rosco::m68k::emu::Duart* __duart = nullptr;
     std::fstream ifs("rosco_sd.bin", std::ios::binary | std::ios::ate | std::ios::in | std::ios::out);
 
     int illegal_instruction_handler(int opcode) {
+        NoBusErrors noBusErrors;
         m68ki_cpu_core ctx;
         m68k_get_context(&ctx);
 
@@ -579,6 +591,7 @@ extern "C" void r68k_trace_pc(unsigned int pc) {
     // Only with R68K_TRACE set: keep a PC trace (shown by the SIGUSR1
     // dump), stop it when the PC runs wild.  R68K_DUMPAT=<hex pc>: dump
     // CPU and RAM the first time pc is reached.
+    NoBusErrors noBusErrors;
     static int dumpat_init, tracing;
     static unsigned long dumpat;
     if (!dumpat_init) {
@@ -607,6 +620,7 @@ extern "C" void r68k_trace_pc(unsigned int pc) {
 }
 
 static void dump_cpu() {
+    NoBusErrors noBusErrors;
     char buf[100];
     unsigned int pc = m68k_get_reg(NULL, M68K_REG_PC);
     fprintf(stderr, "\n[r68k] PC=%08X SR=%04X SP=%08X USP=%08X SSP=%08X\n",
@@ -671,7 +685,8 @@ int main(int argc, char** argv) {
 
     if (argc != 2) {
         cout << "Usage: r68k [-d] <binary>" << endl;
-        cout << "  -d  emulate the XR68C681 DUART registers and timer" << endl;
+        cout << "  -d  emulate the XR68C681 DUART registers and timer, and bus" << endl;
+        cout << "      errors for unmapped addresses (real firmware runs with this)" << endl;
         cout << "  R68K_RAM=5M  RAM size (default 1M, the on-board RAM)" << endl;
         return 1;
     } else {
@@ -698,8 +713,14 @@ int main(int argc, char** argv) {
         m68k_pulse_reset();
 
         if (emulateDuart) {
+            r68k_bus_errors = true;     // after the reset: it reads outside m68k_execute
+
             while (1) {
                 m68k_execute(10000);
+                if (CPU_STOPPED & STOP_LEVEL_HALT) {
+                    fprintf(stderr, "\n[r68k] CPU halted, exiting\n");
+                    exit(1);
+                }
                 __duart->poll();
                 check_dump();
             }

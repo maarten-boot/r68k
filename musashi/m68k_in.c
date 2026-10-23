@@ -9237,8 +9237,18 @@ M68KMAKE_OP(rte, 32, ., .)
 				return;
 			} else if (format_word == 8) {
 				/* Format 8 stack frame -- 68010 only. 29 word bus/address error */
+				/* The handler set RR in the special status word: it has
+				 * done the faulted cycle itself, the 010 continues after
+				 * it. The frame's PC is the faulting instruction (its
+				 * register effects are undone), so skip that instead. */
+				uint rerun_done = m68ki_read_16(REG_A[7]+8) & 0x8000;
 				new_sr = m68ki_pull_16();
 				new_pc = m68ki_pull_32();
+				if(rerun_done)
+				{
+					char dasm[256];
+					new_pc += m68k_disassemble(dasm, new_pc, M68K_CPU_TYPE_68010);
+				}
 				m68ki_fake_pull_16();	/* format word */
 				m68ki_fake_pull_16();	/* special status word */
 				m68ki_fake_pull_32();	/* fault address */

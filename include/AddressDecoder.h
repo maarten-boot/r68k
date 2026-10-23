@@ -19,6 +19,10 @@ namespace rosco {
                 explicit AddressDecoder(std::uint32_t romsize, std::uint32_t ramsize, char const* filename);
 
                 Memory* getMemoryForAddress(std::uint32_t address);
+
+                // Is there anything at address .. address + size - 1 (RAM,
+                // ROM or the DUART)? If not, the hardware would give /BERR.
+                bool isMapped(std::uint32_t address, std::uint32_t size);
                 std::uint32_t makeRelativeAddress(std::uint32_t address);
 
                 void reset();
