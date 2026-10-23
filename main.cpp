@@ -103,7 +103,7 @@ extern "C" {
     rosco::m68k::emu::Duart* __duart = nullptr;
     std::fstream ifs("rosco_sd.bin", std::ios::binary | std::ios::ate | std::ios::in | std::ios::out);
 
-    int illegal_instruction_handler(int __attribute__((unused)) opcode) {
+    int illegal_instruction_handler(int opcode) {
         m68ki_cpu_core ctx;
         m68k_get_context(&ctx);
 
@@ -117,7 +117,8 @@ extern "C" {
         uint32_t a2 = m68k_get_reg(&ctx, M68K_REG_A2);
         uint32_t a7 = m68k_get_reg(&ctx, M68K_REG_A7);
 
-        if ((d7 & 0xFFFFFF00) == 0xF0F0F000 && d6 == 0xAA55AA55) {
+        // Firmware traps are an ILLEGAL (0x4AFC) with the magic in D7/D6
+        if (opcode == 0x4AFC && (d7 & 0xFFFFFF00) == 0xF0F0F000 && d6 == 0xAA55AA55) {
             // It's a trap!
 
             // below leaves Easy68k ops from E0 and up, others from 0 ..
@@ -485,6 +486,20 @@ extern "C" {
 
         // Not a firmware trap: a real illegal instruction, so take the
         // exception (vector 4) as the CPU would.
+        // The firmware's CPU detection does this on purpose, with its own
+        // handler. Only when vector 4 is still the default from the ROM's
+        // vector table, which halts for ever, stop here instead with the
+        // exit status of a SIGILL (128 + 4).
+        uint32_t handler = m68k_read_memory_32(m68k_get_reg(&ctx, M68K_REG_VBR) + 4 * 4);
+
+        if (handler == m68k_read_memory_32(0xE00000 + 4 * 4)) {
+            fprintf(stderr, "\n[r68k] illegal instruction %04X at %08X, no handler: exiting\n",
+                    opcode & 0xFFFF, m68k_get_reg(&ctx, M68K_REG_PPC));
+            m68k_pulse_halt();
+            tcsetattr(STDIN_FILENO, TCSANOW, &originalTermios);
+            exit(128 + 4);
+        }
+
         return 0;
     }
 
@@ -611,6 +626,13 @@ static void dump_cpu() {
     }
 }
 
+static void check_dump() {
+    if (dump_requested) {
+        dump_requested = 0;
+        dump_cpu();
+    }
+}
+
 int main(int argc, char** argv) {
     signal(SIGUSR1, [](int) { dump_requested = 1; });
     bool emulateDuart = argc == 3 && std::string(argv[1]) == "-d";
@@ -652,10 +674,7 @@ int main(int argc, char** argv) {
             while (1) {
                 m68k_execute(10000);
                 __duart->poll();
-                if (dump_requested) {
-                    dump_requested = 0;
-                    dump_cpu();
-                }
+                check_dump();
             }
         }
 
@@ -663,6 +682,7 @@ int main(int argc, char** argv) {
         while (1) {
             m68k_execute(100000);
             m68k_get_context(&ctx);
+            check_dump();
         }
 
         is_done = true;
