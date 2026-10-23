@@ -1,3 +1,5 @@
+#include <cerrno>
+#include <chrono>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -5,11 +7,8 @@
 #include <filesystem>
 #include <stdint.h>
 #include <unistd.h>
-#include <thread>
-#include <atomic>
 #include <termios.h>
 #include <sys/select.h>
-#include <fcntl.h>
 #include <iomanip>
 #include <vector>
 
@@ -22,17 +21,36 @@ using namespace std;
 #define DUART_IRQ	4
 #define DUART_VEC	0x45
 
-#define TICK_COUNT 0x408
+#define UPTICKS    0x40C
 #define ECHO_ON    0x410
 #define PROMPT_ON  0x411
 #define LF_DISPLAY 0x412
 
 struct termios originalTermios;
+static bool termSaved;
 
+static void restore_term() {
+    if (termSaved) {
+        tcsetattr(STDIN_FILENO, TCSANOW, &originalTermios);
+    }
+}
+
+static void restore_term_and_die(int sig) {
+    restore_term();
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+
+// Raw-ish input; the terminal is put back on any exit, also on ^C.
+// stdin stays blocking: read_char() waits in read(), the other input
+// checks use select().
 void init_term() {
     struct termios newTermios;
 
-    tcgetattr(STDIN_FILENO, &originalTermios);
+    if (tcgetattr(STDIN_FILENO, &originalTermios) != 0) {
+        return;     // not a terminal
+    }
+    termSaved = true;
 
     newTermios = originalTermios;
     newTermios.c_lflag &= ~(ICANON | ECHO);
@@ -40,8 +58,10 @@ void init_term() {
 
     tcsetattr(STDIN_FILENO, TCSANOW, &newTermios);
 
-    int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
-    fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
+    atexit(restore_term);
+    signal(SIGINT, restore_term_and_die);
+    signal(SIGTERM, restore_term_and_die);
+    signal(SIGHUP, restore_term_and_die);
 }
 
 bool check_char() {
@@ -59,7 +79,12 @@ bool check_char() {
 char read_char() {
     char c = 0;
     while (c == 0) {
-        read(STDIN_FILENO, &c, 1);
+        ssize_t n = read(STDIN_FILENO, &c, 1);
+        if (n == 0 || (n < 0 && errno != EINTR)) {
+            // End of input (a pipe, a file, /dev/null): nothing more will come
+            fprintf(stderr, "\n[r68k] end of input, exiting\n");
+            exit(0);
+        }
     }
     return c;
 }
@@ -168,7 +193,6 @@ extern "C" {
                 case 3:
                     // prog_exit
                     m68k_pulse_halt();
-                    tcsetattr(STDIN_FILENO, TCSANOW, &originalTermios);
                     exit(m68k_read_memory_32(a7 + 4));       // assuming called from cstdlib - C will have stacked an exit code
                     break;
                 case 4:
@@ -205,7 +229,7 @@ extern "C" {
                         std::vector<char> buf(512);
 
                         ifs.clear();
-                        ifs.seekg(d1 * 512, std::ios::beg);
+                        ifs.seekg(std::streamoff(d1) * 512, std::ios::beg);
                         ifs.read(&buf.front(), 512);
 
                         if (ifs.gcount() == 512) {
@@ -234,10 +258,11 @@ extern "C" {
                         }
 
                         ifs.clear();
-                        ifs.seekg(d1 * 512, std::ios::beg);
+                        ifs.seekp(std::streamoff(d1) * 512, std::ios::beg);
                         ifs.write(&buf.front(), 512);
+                        ifs.flush();
 
-                        if (ifs.gcount() == 512) {
+                        if (ifs.good()) {
                             m68k_set_reg(M68K_REG_D0, 1);		    // succeed
                         } else {
                             cout << "!!! Bad Write" << endl;
@@ -310,7 +335,9 @@ extern "C" {
                     if (m68k_read_memory_8(PROMPT_ON) == 1) {
                         cout << "Input#> ";
                     }
-                    
+
+                    chars_left = 10;
+
                     while (--chars_left) {
                         cout << flush;
                         c = read_char();
@@ -354,13 +381,12 @@ extern "C" {
                     break;
                 case 0xD8:
                     // GETUPTICKS
-                    m68k_set_reg(M68K_REG_D1, m68k_read_memory_16(TICK_COUNT));
+                    m68k_set_reg(M68K_REG_D1, m68k_read_memory_32(UPTICKS));
                     
                     break;
                 case 0xD9:
                     // TERMINATE
                     m68k_pulse_halt();
-                    tcsetattr(STDIN_FILENO, TCSANOW, &originalTermios);
                     exit(0);
 
                     break;
@@ -478,7 +504,7 @@ extern "C" {
                     break;
                 
                 default:
-                    cerr << "<UNKNOWN OP " << hex << op << "; D7=0x" << hex << d7 << "; D6=0x" << d6 << ": IGNORED>" << endl;
+                    cerr << "<UNKNOWN OP " << hex << (int)op << "; D7=0x" << d7 << "; D6=0x" << d6 << ": IGNORED>" << dec << endl;
             }
 
             return 1;
@@ -496,7 +522,6 @@ extern "C" {
             fprintf(stderr, "\n[r68k] illegal instruction %04X at %08X, no handler: exiting\n",
                     opcode & 0xFFFF, m68k_get_reg(&ctx, M68K_REG_PPC));
             m68k_pulse_halt();
-            tcsetattr(STDIN_FILENO, TCSANOW, &originalTermios);
             exit(128 + 4);
         }
 
@@ -517,21 +542,6 @@ extern "C" {
             cerr << "WARN: Unexpected IRQ " << irq << "; Autovectoring, but machine will probably lock up!" << endl;
             return M68K_INT_ACK_AUTOVECTOR;
         }
-    }
-}
-
-std::atomic_bool is_done;
-
-void timer_interrupt() {
-    int i = 100;
-
-    while (!is_done) {
-        if (i++ == 100) {
-            m68k_set_irq(DUART_IRQ);
-            i = 0;
-        }
-
-        usleep(100);
     }
 }
 
@@ -626,6 +636,21 @@ static void dump_cpu() {
     }
 }
 
+// The ROM: next to the r68k executable, wherever it was started from
+static std::filesystem::path rom_path(const char *argv0) {
+    std::error_code ec;
+    std::filesystem::path exe = std::filesystem::read_symlink("/proc/self/exe", ec);
+    if (ec) {
+        exe = argv0;
+    }
+
+    std::filesystem::path dir = exe.parent_path();
+    if (dir.empty()) {
+        dir = ".";
+    }
+    return dir / "firmware" / "rosco_m68k.rom";
+}
+
 static void check_dump() {
     if (dump_requested) {
         dump_requested = 0;
@@ -647,14 +672,16 @@ int main(int argc, char** argv) {
         cout << "  R68K_RAM=5M  RAM size (default 1M, the on-board RAM)" << endl;
         return 1;
     } else {
-        init_term();
-
-        std::filesystem::path path = std::filesystem::path(argv[0]).parent_path();
-        path += "/firmware/rosco_m68k.rom";
-
         ram_size = get_ram_size();
-        __mem = new rosco::m68k::emu::AddressDecoder(0x40000, ram_size, path.string().c_str());
-        __mem->LoadMemoryFile(0x40000, argv[1]);
+        try {
+            __mem = new rosco::m68k::emu::AddressDecoder(0x40000, ram_size, rom_path(argv[0]).string().c_str());
+            __mem->LoadMemoryFile(0x40000, argv[1]);
+        } catch (const std::exception &e) {
+            cerr << "r68k: " << e.what() << endl;
+            return 1;
+        }
+
+        init_term();
 
         if (emulateDuart) {
             __duart = new rosco::m68k::emu::Duart([](bool asserted) {
@@ -667,9 +694,6 @@ int main(int argc, char** argv) {
         m68k_init();
         m68k_pulse_reset();
 
-        m68ki_cpu_core ctx;
-        m68k_get_context(&ctx);
-        
         if (emulateDuart) {
             while (1) {
                 m68k_execute(10000);
@@ -678,17 +702,21 @@ int main(int argc, char** argv) {
             }
         }
 
-        std::thread timer_thread(timer_interrupt);
+        // Legacy tick without -d: 100Hz on vector 0x45, the request is
+        // dropped again in interrupt_ack_handler
+        const auto tick = std::chrono::milliseconds(10);
+        auto nextTick = std::chrono::steady_clock::now() + tick;
         while (1) {
             m68k_execute(100000);
-            m68k_get_context(&ctx);
+
+            auto now = std::chrono::steady_clock::now();
+            if (now >= nextTick) {
+                m68k_set_irq(DUART_IRQ);
+                nextTick += tick;
+                if (nextTick < now) nextTick = now + tick;
+            }
+
             check_dump();
         }
-
-        is_done = true;
-        timer_thread.join();
-
-        delete(__mem);
-        return 0;
     }
 }
