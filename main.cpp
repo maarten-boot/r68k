@@ -18,6 +18,9 @@
 
 using namespace std;
 
+// The ROM window, 0xE00000-0xEFFFFF: 1MB, like the v2.x boards' flash
+#define ROM_SIZE   0x100000
+
 #define DUART_IRQ	4
 #define DUART_VEC	0x45
 
@@ -674,7 +677,7 @@ int main(int argc, char** argv) {
     } else {
         ram_size = get_ram_size();
         try {
-            __mem = new rosco::m68k::emu::AddressDecoder(0x40000, ram_size, rom_path(argv[0]).string().c_str());
+            __mem = new rosco::m68k::emu::AddressDecoder(ROM_SIZE, ram_size, rom_path(argv[0]).string().c_str());
             __mem->LoadMemoryFile(0x40000, argv[1]);
         } catch (const std::exception &e) {
             cerr << "r68k: " << e.what() << endl;
