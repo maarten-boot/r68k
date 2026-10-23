@@ -39,13 +39,19 @@ namespace rosco {
 
                 void setDuart(Duart* d) { this->duart = d; }
 
+                // The board's flash write enable (off by default): when
+                // off, writes to the ROM are ignored
+                void setRomWritable(bool w) { this->romWritable = w; }
+
             private:
                 std::unique_ptr<Memory> rom;
                 std::unique_ptr<Memory> ram;
                 bool bootLineActive;
                 uint32_t bootReadCount;
                 Duart* duart = nullptr;
+                bool romWritable = false;
 
+                Memory* getWritableMemoryForAddress(std::uint32_t address);
                 void ReadRomData(char const* filename);
             };
         }

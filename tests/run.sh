@@ -151,6 +151,17 @@ fi
 R68K_DUMPAT=40006 run 5 exit.bin < /dev/null
 expect "R68K_DUMPAT" 0 "" "reached 00040006"
 
+# move.b #$5A,$E00100 / move.l #$A5A5A5A5,$E00104 / move.b $E00100,d0 /
+# add.b $E00107,d0 / and.l #$FF,d0 / push x2 / exit: $5A + $A5 = $FF with
+# the ROM writable, else the ROM's own bytes ($00 + $8A here)
+bin romwrite.bin "13fc 005a 00e0 0100 23fc a5a5 a5a5 00e0 0104 1039 00e0 0100 d039 00e0 0107 0280 0000 00ff 2f00 2f00 $EXIT"
+run 5 romwrite.bin < /dev/null
+if [ "$rc" != 255 ] && [ "$rc" != 124 ]; then ok "ROM read-only"; else fail "ROM read-only" "exit status $rc"; fi
+run 5 -d romwrite.bin < /dev/null
+if [ "$rc" != 255 ] && [ "$rc" != 124 ]; then ok "-d: ROM read-only, no bus error"; else fail "-d: ROM read-only, no bus error" "exit status $rc"; fi
+run 5 romwrite.bin -w < /dev/null
+expect "-w: ROM writable" 255
+
 # options: anywhere, -r with or without a space, --, errors
 run 5 duart.bin -d < /dev/null
 expect "-d after the binary" 0 "^A$"

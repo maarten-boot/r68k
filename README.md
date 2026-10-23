@@ -39,7 +39,7 @@ see `R68K_REAL_ROMS` in `tests/run.sh`.
 ## Run it
 
 ```shell
-./r68k [-d] [-r <rom>] <rosco_m68k binary file>
+./r68k [-d] [-r <rom>] [-w] <rosco_m68k binary file>
 ```
 
 The options can also come after the file; `--` ends them.
@@ -56,6 +56,10 @@ the real rosco_m68k firmware:
 ```shell
 ./r68k -d -r rosco_m68k.rom whatever.bin
 ```
+
+The ROM is read-only, writes to it are ignored, like the board's flash
+with its write enable off. `-w` makes it writable, as plain memory: the
+flash chip's program and erase commands are not emulated.
 
 r68k exits with the program's exit code. Other exit codes:
 

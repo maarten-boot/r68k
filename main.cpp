@@ -691,11 +691,13 @@ static void check_dump() {
 }
 
 static void usage(std::ostream &out) {
-    out << "Usage: r68k [-d] [-r <rom>] <binary>   (options anywhere, -- ends them)" << endl;
+    out << "Usage: r68k [-d] [-r <rom>] [-w] <binary>   (options anywhere, -- ends them)" << endl;
     out << "  -d        emulate the XR68C681 DUART registers and timer, and bus" << endl;
     out << "            errors for unmapped addresses (real firmware runs with this)" << endl;
     out << "  -r <rom>  ROM image, also -r<rom> (default R68K_ROM, else" << endl;
     out << "            firmware/rosco_m68k.rom next to r68k)" << endl;
+    out << "  -w        ROM writable (the board's flash write enable), as plain" << endl;
+    out << "            memory: no flash commands. Default: writes ignored" << endl;
     out << "  -h        this help" << endl;
     out << "  R68K_RAM=5M  RAM size (default 1M, the on-board RAM)" << endl;
 }
@@ -707,6 +709,7 @@ int main(int argc, char** argv) {
     // non-option, and the options may also come after the binary
     bool emulateDuart = false;
     const char *romOption = NULL;
+    bool romWritable = false;
     const char *binary = NULL;
     bool options = true;
 
@@ -732,6 +735,8 @@ int main(int argc, char** argv) {
                 cerr << "r68k: -r needs a ROM file" << endl;
                 return 1;
             }
+        } else if (arg == "-w") {
+            romWritable = true;
         } else if (arg == "-h") {
             usage(cout);
             return 0;
@@ -750,6 +755,7 @@ int main(int argc, char** argv) {
         try {
             __mem = new rosco::m68k::emu::AddressDecoder(ROM_SIZE, ram_size, rom_path(argv[0], romOption).string().c_str());
             __mem->LoadMemoryFile(0x40000, binary);
+            __mem->setRomWritable(romWritable);
         } catch (const std::exception &e) {
             cerr << "r68k: " << e.what() << endl;
             return 1;

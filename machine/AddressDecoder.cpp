@@ -41,6 +41,15 @@ namespace rosco {
                 }
             }
 
+            Memory* AddressDecoder::getWritableMemoryForAddress(std::uint32_t address) {
+                Memory *mem = this->getMemoryForAddress(address);
+
+                if (mem == this->rom.get() && !this->romWritable) {
+                    return NULL;    // flash without write enable: ignored
+                }
+                return mem;
+            }
+
             bool AddressDecoder::isMapped(std::uint32_t address, std::uint32_t size) {
                 for (std::uint32_t a : {address, address + size - 1}) {
                     bool duart = this->duart != nullptr && Duart::contains(a);
@@ -147,7 +156,7 @@ namespace rosco {
                     return;
                 }
 
-                Memory *mem = this->getMemoryForAddress(address);
+                Memory *mem = this->getWritableMemoryForAddress(address);
 
                 if (mem != NULL) {
                     mem->write32(makeRelativeAddress(address), data);
@@ -163,7 +172,7 @@ namespace rosco {
                     return;
                 }
 
-                Memory *mem = this->getMemoryForAddress(address);
+                Memory *mem = this->getWritableMemoryForAddress(address);
 
                 if (mem != NULL) {
                     mem->write16(makeRelativeAddress(address), data);
@@ -178,7 +187,7 @@ namespace rosco {
                     return;
                 }
 
-                Memory *mem = this->getMemoryForAddress(address);
+                Memory *mem = this->getWritableMemoryForAddress(address);
 
                 if (mem != NULL) {
                     mem->write8(makeRelativeAddress(address), data);
