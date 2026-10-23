@@ -144,6 +144,10 @@ else
     fail "R68K_WATCH" "rc $rc, $(grep -c . err) lines on stderr"
 fi
 
+# exit.bin: the second instruction is at 0x40006
+R68K_DUMPAT=40006 run 5 exit.bin < /dev/null
+expect "R68K_DUMPAT" 0 "" "reached 00040006"
+
 run 5 missing.bin < /dev/null
 expect "missing program" 1 "" "cannot open missing.bin"
 

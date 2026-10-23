@@ -587,6 +587,11 @@ static unsigned int get_ram_size() {
 
 static void dump_cpu();
 
+// Whether Musashi calls r68k_trace_pc at all (see m68kconf.h)
+extern "C" {
+    int r68k_trace_on = 0;
+}
+
 extern "C" void r68k_trace_pc(unsigned int pc) {
     // Only with R68K_TRACE set: keep a PC trace (shown by the SIGUSR1
     // dump), stop it when the PC runs wild.  R68K_DUMPAT=<hex pc>: dump
@@ -714,6 +719,8 @@ int main(int argc, char** argv) {
             });
             __mem->setDuart(__duart);
         }
+
+        r68k_trace_on = getenv("R68K_TRACE") != NULL || getenv("R68K_DUMPAT") != NULL;
 
         m68k_set_cpu_type(M68K_CPU_TYPE_68010);
         m68k_init();
