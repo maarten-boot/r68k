@@ -88,6 +88,14 @@ if [ "$rc" = 0 ] && [ ! -s out ]; then ok "no -d: DUART not there"; else fail "n
 run 5 -d exit.bin < /dev/null
 expect "-d: memory sizing with bus errors" 0
 
+# move.l $A00000,d0: nothing there, the ROM's default bus error handler
+# is in place
+bin berr.bin "2039 00a0 0000 $EXIT"
+run 5 -d berr.bin < /dev/null
+expect "-d: bus error exits 128+SIGBUS" $((128 + $(kill -l BUS))) "" "bus error at 00A00000"
+run 5 berr.bin < /dev/null
+expect "no -d: no bus error" 0
+
 # moveq #0,d7 / illegal: a real illegal instruction, the ROM's halting
 # handler is still in place
 bin illegal.bin "7e00 4afc"

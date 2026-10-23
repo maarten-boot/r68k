@@ -2,6 +2,7 @@
 // Created by ross.bamford on 01/04/2019.
 //
 
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include "AddressDecoder.h"
@@ -31,6 +32,17 @@ static void check_bus(unsigned int address, unsigned int size) {
             m68k_pulse_halt();
             return;
         }
+
+        /* Vector 2 still the default from the ROM's vector table: that
+         * handler halts for ever, report and stop here instead, with the
+         * exit status of a SIGBUS. (Probes install their own handler.) */
+        unsigned int vbr = m68k_get_reg(NULL, M68K_REG_VBR);
+        if (__mem->read32(vbr + 2 * 4) == __mem->read32(0xE00000 + 2 * 4)) {
+            fprintf(stderr, "\n[r68k] bus error at %08X, PC %08X, no handler: exiting\n",
+                    address, m68k_get_reg(NULL, M68K_REG_PPC));
+            exit(128 + SIGBUS);
+        }
+
         m68k_pulse_bus_error();     /* does not return */
     }
 }
