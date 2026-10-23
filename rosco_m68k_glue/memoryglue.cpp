@@ -112,8 +112,13 @@ static void watch(unsigned int address, unsigned int size, unsigned int value) {
     if (!init) {
         const char *w = getenv("R68K_WATCH");
         init = 1;
-        if (w && sscanf(w, "%lx-%lx,%lx-%lx", &lo, &hi, &plo, &phi) < 2)
+        int n = w ? sscanf(w, "%lx-%lx,%lx-%lx", &lo, &hi, &plo, &phi) : 0;
+        if (n < 2)
             lo = hi = 0;
+        if (n == 3) {
+            fprintf(stderr, "[r68k] R68K_WATCH: the excluded range needs plo-phi, ignored\n");
+            plo = phi = 0;
+        }
     }
     if (address + size > lo && address < hi && count < 8) {
         unsigned int pc = m68k_get_reg(NULL, M68K_REG_PPC);
@@ -122,8 +127,19 @@ static void watch(unsigned int address, unsigned int size, unsigned int value) {
         fprintf(stderr, "\n[r68k] write %u bytes %08X to %08X at PC %08X SR %04X\n",
                 size, value, address, pc, m68k_get_reg(NULL, M68K_REG_SR));
         if (count == 1) {	/* the code around the first writer */
+            /* Up to 0x40 bytes before it: the earliest start from which
+             * the disassembly gets to pc itself, not across it */
             char buf[100];
-            for (unsigned int a = pc - 0x40, n; a < pc + 0x10; a += n) {
+            unsigned int start = pc, a, n;
+            for (unsigned int s = pc < 0x40 ? 0 : pc - 0x40; s < pc; s += 2) {
+                for (a = s; a < pc; a += m68k_disassemble(buf, a, M68K_CPU_TYPE_68010))
+                    ;
+                if (a == pc) {
+                    start = s;
+                    break;
+                }
+            }
+            for (a = start; a < pc + 0x10; a += n) {
                 n = m68k_disassemble(buf, a, M68K_CPU_TYPE_68010);
                 fprintf(stderr, "[r68k]   %08X  %s\n", a, buf);
             }

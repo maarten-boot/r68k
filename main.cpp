@@ -576,9 +576,9 @@ static unsigned int get_ram_size() {
     if (e == NULL || *e == 0) return 0x100000;
     char *end;
     unsigned long n = strtoul(e, &end, 0);
-    if (*end == 'M' || *end == 'm') n <<= 20;
-    else if (*end == 'K' || *end == 'k') n <<= 10;
-    if (n < 0x80000 || n > 0xE00000 || (n & 0x7FFFF) != 0) {
+    if (*end == 'M' || *end == 'm') n <<= 20, end++;
+    else if (*end == 'K' || *end == 'k') n <<= 10, end++;
+    if (end == e || *end != 0 || n < 0x80000 || n > 0xE00000 || (n & 0x7FFFF) != 0) {
         fprintf(stderr, "r68k: R68K_RAM must be a multiple of 512K, 512K-14M\n");
         exit(1);
     }

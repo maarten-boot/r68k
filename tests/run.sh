@@ -133,6 +133,17 @@ for mode in "" "-d"; do
     if grep -q "PC=00040000" err; then ok "SIGUSR1 dump ${mode:-without -d}"; else fail "SIGUSR1 dump ${mode:-without -d}" "no dump"; fi
 done
 
+# move.l #$23C00000,d0 / move.l d0,$1000 / exit: the immediate looks like
+# an instruction, a disassembly from 0x40 bytes back goes across the writer
+bin watch.bin "203c 23c0 0000 23c0 0000 1000 $EXIT"
+R68K_WATCH=1000-1004 run 5 watch.bin < /dev/null
+if [ "$rc" = 0 ] && grep -q "write 4 bytes 23C00000 to 00001000 at PC 00040006" err &&
+   grep -q "00040000  move.l  #\$23c00000, D0" err && grep -q "00040006  move.l  D0, \$1000" err; then
+    ok "R68K_WATCH"
+else
+    fail "R68K_WATCH" "rc $rc, $(grep -c . err) lines on stderr"
+fi
+
 run 5 missing.bin < /dev/null
 expect "missing program" 1 "" "cannot open missing.bin"
 
@@ -142,6 +153,9 @@ expect "program too large" 1 "" "does not fit"
 
 R68K_RAM=700K run 5 exit.bin < /dev/null
 expect "bad R68K_RAM" 1 "" "R68K_RAM must be"
+
+R68K_RAM=5MB run 5 exit.bin < /dev/null
+expect "R68K_RAM with trailing garbage" 1 "" "R68K_RAM must be"
 
 R68K_RAM=2M run 5 exit.bin < /dev/null
 expect "R68K_RAM=2M" 0
