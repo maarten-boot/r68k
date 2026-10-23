@@ -162,8 +162,11 @@ int interrupt_ack_handler(unsigned int);
 /* If ON, CPU will call the instruction hook callback before every
  * instruction.
  */
-#define M68K_INSTRUCTION_HOOK       OPT_OFF
-#define M68K_INSTRUCTION_CALLBACK(pc) your_instruction_hook_function(pc)
+#define M68K_INSTRUCTION_HOOK       OPT_SPECIFY_HANDLER
+/* r68k: only a flag test unless R68K_TRACE or R68K_DUMPAT is set */
+#define M68K_INSTRUCTION_CALLBACK(pc) do { if (r68k_trace_on) r68k_trace_pc(pc); } while (0)
+extern int r68k_trace_on;
+void r68k_trace_pc(unsigned int pc);
 
 
 /* If ON, the CPU will emulate the 4-byte prefetch queue of a real 68000 */
