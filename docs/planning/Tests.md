@@ -2,7 +2,7 @@
 
 Each test traces to a `Spec.md` item. The automated ones are in
 `tests/run.sh` (`make check`), under the names given. Status as of
-2026-11-07, r68k `7b95236`: all 45 automated tests pass.
+2026-11-07, r68k `6e0177e`: all 46 automated tests pass.
 
 ## Automated (`make check`)
 
@@ -46,6 +46,7 @@ Each test traces to a `Spec.md` item. The automated ones are in
 | T36 | S6.3 | -h | pass |
 | T37 | S8.5, S8.6 | R68K_PROF profile | pass |
 | T38 | S8.5, S5.3 | -d without R68K_PROF: 0xFFFFF0 is a bus error | pass |
+| T46 | S2.6, S8.5 | shift cycles (immediate and register count): lsl.w #8 22, lsr.w #1 8, lsl.l #8 24, rol.b #3 12, lsl.l d1,d0 (8) 24 | pass (fails before 6e0177e with 38, 10, 40, 18, 24) |
 | T39 | S6.2 | missing program | pass |
 | T40 | S6.2, S1.6 | program too large | pass |
 | T41 | S1.2, S6.2 | bad R68K_RAM | pass |

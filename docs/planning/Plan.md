@@ -27,14 +27,16 @@ so fix forward, never rewrite.
 | P16 | DUART console path for embedding (from bbc-basic-68k `r68k-web.patch`) | S10.1 | a3e0ce2 |
 | P17 | Cycle profiler, gated on `R68K_PROF` (from `r68k-0002-cycle-profiler.patch`) | S8.5 | 7b95236 |
 | P18 | `docs/planning` (this branch, `planning`) | – | 2026-11-07 |
+| P22 | Shift by an immediate count charged its 2n cycles twice (report from the bbc-basic-68k profiling thread, its P13) | S2.6 | 6e0177e |
 
 ## To do
 
 | ID  | What | Spec | Notes |
 |-----|------|------|-------|
-| P19 | Push `rosco-minix-duart` (a3e0ce2, 7b95236) and `planning`; merge into `main` | – | user |
+| P19 | Push `rosco-minix-duart` (a3e0ce2, 7b95236, 6e0177e) and `planning`; merge into `main` | – | user |
 | P20 | bbc-basic-68k: drop `src68k/web/r68k-web.patch` and `mboot/patches/r68k-0002-cycle-profiler.patch` once its r68k includes P16/P17; update PORT_PLAN.md (the illegal-instruction fix is committed, `2d92829`; the kernel now sees a 68010) | S10.1, S8.5 | other project, user's call |
 | P21 | Run the manual tests M3–M5 (`Tests.md`) | S10.1, S7.2, S3.3 | need `emcc`, a real terminal, a test SD image |
+| P23 | bbc-basic-68k: once its r68k includes 6e0177e, remove the shift correction in `src68k/tools/leprof.py` (`correct()`), or shift cycles are subtracted twice | S2.6 | other project, user's call |
 
 ## Later (noted, not planned)
 

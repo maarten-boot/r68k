@@ -18,3 +18,11 @@
 * **docs/planning** set up on branch `planning` (per the new global
   rule): Spec.md, Plan.md, Tests.md, this log and a reconstructed log for
   2026-10-23.
+* **Shift timing** (report from the bbc-basic-68k profiling thread, its
+  P13): immediate-count shifts were charged 2n twice, once by the opcode
+  table builder and once by the handler. Confirmed with R68K_PROF
+  (lsl.w #8 38, lsr.w #1 10, lsl.l #8 40). Removed the table-builder
+  addition (all 24 handlers charge shift<<CYC_SHIFT themselves; rol.b and
+  ror.b as orig_shift) → 22, 8, 24 (6e0177e). New test T46, which fails
+  on the old build. `make check` 46/46. bbc-basic-68k must drop its
+  `leprof.py` correction when it picks this up (Plan P23).

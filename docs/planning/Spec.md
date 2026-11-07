@@ -1,6 +1,6 @@
 # r68k: Spec
 
-What r68k does, as of `7b95236` (2026-11-07). Each item has an ID that
+What r68k does, as of `6e0177e` (2026-11-07). Each item has an ID that
 `Tests.md` and `Plan.md` refer to. Where the code is the reference, the
 file is named.
 
@@ -38,6 +38,9 @@ file is named.
   - bus error (with `-d`, S5.4): 128 + SIGBUS.
 - **S2.5** `RTE` from a format 8 frame with the RR bit set (the handler
   did the faulted cycle) resumes after the faulting instruction.
+- **S2.6** Cycle counts follow the 68010 tables. Shifts and rotates by an
+  immediate count cost 6 + 2n (byte, word) or 8 + 2n (long), charged
+  once, as do shifts by a register count.
 
 ## S3 Firmware calls (translator ROM)
 
