@@ -26,3 +26,5 @@
   ror.b as orig_shift) → 22, 8, 24 (6e0177e). New test T46, which fails
   on the old build. `make check` 46/46. bbc-basic-68k must drop its
   `leprof.py` correction when it picks this up (Plan P23).
+* Pushed (`rosco-minix-duart`, `planning`) and merged into `main` by the
+  user: P19 done.
