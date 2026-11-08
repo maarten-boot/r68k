@@ -28,6 +28,7 @@ so fix forward, never rewrite.
 | P17 | Cycle profiler, gated on `R68K_PROF` (from `r68k-0002-cycle-profiler.patch`) | S8.5 | 7b95236 |
 | P18 | `docs/planning` (this branch, `planning`) | – | 2026-11-07 |
 | P22 | Shift by an immediate count charged its 2n cycles twice (report from the bbc-basic-68k profiling thread, its P13) | S2.6 | 6e0177e |
+| P24 | `-d`: the DUART model kept a key the firmware console calls never saw (report and patch from the BBCSDL port) | S5.6 | 4c6c84a |
 | P19 | Pushed `rosco-minix-duart` (a3e0ce2, 7b95236, 6e0177e) and `planning`; merged into `main` by the user | – | 2026-11-07 |
 
 ## To do
@@ -36,6 +37,8 @@ so fix forward, never rewrite.
 |-----|------|------|-------|
 | P20 | bbc-basic-68k: drop `src68k/web/r68k-web.patch` and `mboot/patches/r68k-0002-cycle-profiler.patch` once its r68k includes P16/P17; update PORT_PLAN.md (the illegal-instruction fix is committed, `2d92829`; the kernel now sees a 68010) | S10.1, S8.5 | other project, user's call |
 | P21 | Run the manual tests M3–M5 (`Tests.md`) | S10.1, S7.2, S3.3 | need `emcc`, a real terminal, a test SD image |
+| P25 | Remove the untracked `REPORT-duart-console-input.md`/`.patch` from the r68k root (applied as 4c6c84a) | S5.6 | user's call |
+| P26 | Optional: r68k's firmware puts the DUART base `0xF00001` at `0x418` (SDB) with `-d`, as the real firmware does, so programs can find it | S5.1 | needs `vasmm68k_mot` to rebuild the ROM |
 | P23 | bbc-basic-68k: once its r68k includes 6e0177e, remove the shift correction in `src68k/tools/leprof.py` (`correct()`), or shift cycles are subtracted twice | S2.6 | other project, user's call |
 
 ## Later (noted, not planned)

@@ -2,7 +2,7 @@
 
 Each test traces to a `Spec.md` item. The automated ones are in
 `tests/run.sh` (`make check`), under the names given. Status as of
-2026-11-07, r68k `6e0177e`: all 46 automated tests pass.
+2026-11-08, r68k `4c6c84a`: all 47 automated tests pass.
 
 ## Automated (`make check`)
 
@@ -46,6 +46,7 @@ Each test traces to a `Spec.md` item. The automated ones are in
 | T36 | S6.3 | -h | pass |
 | T37 | S8.5, S8.6 | R68K_PROF profile | pass |
 | T38 | S8.5, S5.3 | -d without R68K_PROF: 0xFFFFF0 is a bus error | pass |
+| T47 | S5.6 | -d: read_char loses no key to the DUART (echo program with work between keys; lost the 2nd key on 10/10 runs before 4c6c84a, 0/10 after) | pass |
 | T46 | S2.6, S8.5 | shift cycles (immediate and register count): lsl.w #8 22, lsr.w #1 8, lsl.l #8 24, rol.b #3 12, lsl.l d1,d0 (8) 24 | pass (fails before 6e0177e with 38, 10, 40, 18, 24) |
 | T39 | S6.2 | missing program | pass |
 | T40 | S6.2, S1.6 | program too large | pass |
@@ -65,4 +66,5 @@ Each test traces to a `Spec.md` item. The automated ones are in
 | M4  | S7.2 | Ctrl-C in a real terminal: the shell echoes normally afterwards | not run (no terminal in the session) |
 | M5  | S3.3 | SD write then read back on a real `rosco_sd.bin` | not run |
 | M6  | S9.1 | Touch `include/Duart.h` / `musashi/m68kconf.h`: only the dependent objects rebuild; a no-op `make` does not relink | pass (2026-10-23) |
+| M8  | S5.6 | BBCSDL BBC BASIC (`build/rosco/ROSCODE1.BIN`, `-d`, `R68K_RAM=5M`): `10 REM ABCDEFGHIJKLMNOP`, `LIST` shows the line intact | pass 3/3 (2026-11-08; before: 1 key lost or LIST broken, 3/3) |
 | M7  | S8.6 | 40M-iteration loop: ~0.65–0.8 s with `-O2` and tracing off (was ~10.5 s unoptimised) | pass (2026-10-23) |
