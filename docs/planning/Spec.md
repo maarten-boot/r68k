@@ -71,12 +71,12 @@ file is named.
   disassembler) never are. A bus error while stacking one halts the CPU,
   and r68k exits with 1.
 - **S5.4** An unhandled bus error exits with 128 + SIGBUS (S2.4).
+- **S5.5** The real rosco_m68k firmware 2.42 and 2.50.DEV boot to
+  "Ready for Kermit receive" (`-d -r <rom>`).
 - **S5.6** The firmware console calls (check_char, read_char and the
   Easy68k reads, S3) take a byte the DUART receiver holds before they
   read stdin, so no key is lost between the two readers and the order is
   kept.
-- **S5.5** The real rosco_m68k firmware 2.42 and 2.50.DEV boot to
-  "Ready for Kermit receive" (`-d -r <rom>`).
 
 ## S6 Command line
 
